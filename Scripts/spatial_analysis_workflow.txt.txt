@@ -1,0 +1,49 @@
+// ==========================================
+// PART 1: GOOGLE EARTH ENGINE (GEE) DATA EXTRACTION
+// ==========================================
+
+// 1. Topographic Morphometry
+// Source: NASA/USGS SRTM GL1 (30m)
+var dem = ee.Image('USGS/SRTMGL1_003');
+
+// 2. Meteorological Triggering (Rainfall)
+// Source: CHIRPS 2002 to 2022 annual accumulated average
+var rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/PENTAD')
+  .filterDate('2002-01-01', '2022-12-31')
+  .reduce(ee.Reducer.mean());
+
+// 3. Geo-Environmental: Soil Texture
+// Source: OpenLandMap 250m
+var soilTexture = ee.Image('OpenLandMap/SOL/SOL_TEXTURE-CLASS_USDA-TT_M/v02')
+  .reduce(ee.Reducer.mean());
+
+// 4. Geo-Environmental: Land Use/Land Cover
+// Source: Google Dynamic World V1
+var lulc = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1');
+
+// 5. Geo-Environmental: NDVI
+// Source: Landsat 8 (Collection 2) for year 2022
+var landsat8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA")
+  .filterDate('2022-01-01', '2022-12-31');
+
+var computeNDVI = function(image) {
+  // NDVI = (NIR(B5) - Red(B4)) / (NIR(B5) + Red(B4))
+  var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
+  return image.addBands(ndvi);
+};
+
+// Applied a Mean Reducer to create a representative annual vegetation health map
+var annualNDVI = landsat8.map(computeNDVI).select('NDVI').mean();
+
+
+// ==========================================
+// PART 2: ARCMAP RASTER CALCULATOR FORMULAS
+// ==========================================
+
+// Topographic Wetness Index (TWI) Calculation:
+// +1 added to Flow Accumulation to prevent mathematical errors in cells with zero accumulation.
+Ln(("Flow_Acc" + 1) / (Tan("Slope_in_Radians")))
+
+// Final AHP Susceptibility Overlay Calculation:
+// Multiplies each 1-5 reclassified raster layer by its normalized AHP weight.
+("Slope_Reclass" * 0.211) + ("Rainfall_Reclass" * 0.168) + ("LULC_Reclass" * 0.126) + ("TWI_Reclass" * 0.098) + ("Dist_Stream_Reclass" * 0.079) + ("Dist_Road_Reclass" * 0.063) + ("Elevation_Reclass" * 0.052) + ("Aspect_Reclass" * 0.051) + ("Soil_Reclass" * 0.044) + ("Curvature_Reclass" * 0.042) + ("NDVI_Reclass" * 0.036) + ("Drainage_Density_Reclass" * 0.030)
